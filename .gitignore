@@ -1,0 +1,19 @@
+# Ambiente virtual
+venv/
+
+# Arquivos gerados
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+
+# Banco de dados local
+docorganizer.db
+
+# Arquivos de configuração pessoal
+config_local.py
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
