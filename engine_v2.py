@@ -20,7 +20,7 @@ import pypdfium2 as pdfium
 import pytesseract
 from PIL import Image
 
-from subject_classifier import FolderModel, classify, normalize, subject_names
+from subject_classifier import FolderModel, classify, classify_kind, normalize, subject_names
 
 
 APP_DIR = Path(os.environ.get("APPDATA", Path.home())) / "DocOrganizer"
@@ -128,6 +128,8 @@ class Proposal:
     needs_review: bool
     action: str = "MOVE"
     excerpt: str = ""
+    kind: str = "Indefinido"
+    new_folder: bool = False
 
 
 def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], None] | None = None,
@@ -171,8 +173,14 @@ def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], Non
     for path, result in extracted:
         try:
             current = path.parent.name if path.parent != root else ""
+            kind = classify_kind(path.name, result["text"])
             ranked = classify(path.name, result["text"], subjects, current)
-            if not current and ranked["score"] < 6:
+            if kind["kind"] != "Faculdade":
+                ranked["suggestion"] = kind["suggestion"]
+                ranked["alternative"] = ""
+                ranked["evidence"] = [kind["evidence"]]
+                ranked["needs_review"] = True
+            elif not current and ranked["score"] < 6:
                 learned = model.suggest(path.name + " " + result["text"])
                 if learned and learned[0][1] > 0.10:
                     ranked["suggestion"] = learned[0][0]
@@ -183,11 +191,12 @@ def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], Non
             confidence = ranked["needs_review"]
             warning = result["warning"]
             proposed_name = suggested_filename(path.name, result["title"])
-            needs_review = confidence or (bool(warning) and not result["text"].strip()) or proposed_name != path.name
+            needs_review = confidence or kind["new_folder"] or (bool(warning) and not result["text"].strip()) or proposed_name != path.name
             proposal = Proposal(path, subject, ranked["alternative"], ", ".join(ranked["evidence"]), warning,
                                 proposed_name, path.name, current, needs_review,
                                 "KEEP" if needs_review or not subject or subject == current else "MOVE",
-                                " ".join(result["text"].split())[:1400])
+                                " ".join(result["text"].split())[:1400], kind["kind"],
+                                bool(subject and not (root / subject).is_dir()))
             proposals.append(proposal)
         except Exception as error:
             proposals.append(Proposal(path, "", "", "", str(error), path.name, path.name,
@@ -201,6 +210,7 @@ def _connection(db_path: Path = DB_PATH) -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, started TEXT NOT NULL, status TEXT NOT NULL)")
     connection.execute("CREATE TABLE IF NOT EXISTS moves (id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, source TEXT NOT NULL, destination TEXT NOT NULL, hash TEXT NOT NULL, status TEXT NOT NULL)")
+    connection.execute("CREATE TABLE IF NOT EXISTS created_dirs (session_id TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY (session_id, path))")
     connection.commit()
     # Recover a completed move whose final database update was interrupted.
     for row in connection.execute("SELECT * FROM moves WHERE status='PLANNED'").fetchall():
@@ -212,12 +222,13 @@ def _connection(db_path: Path = DB_PATH) -> sqlite3.Connection:
 
 
 def _destination(root: Path, subject: str, filename: str) -> Path:
-    if not subject or subject in {".", ".."} or Path(subject).name != subject or any(c in subject for c in '<>:"/\\|?*'):
+    parts = subject.replace("\\", "/").split("/")
+    if not parts or any(not part or part in {".", ".."} or part.strip(" .") != part or any(c in part for c in '<>:"|?*') for part in parts):
         raise ValueError("Pasta de destino inválida")
     if Path(filename).name != filename or Path(filename).suffix.lower() != ".pdf":
         raise ValueError("Nome de PDF inválido")
-    destination = root / subject / filename
-    if destination.parent.is_symlink() or not destination.parent.resolve().is_relative_to(root.resolve()):
+    destination = root.joinpath(*parts) / filename
+    if any(parent.is_symlink() for parent in (root.joinpath(*parts[:i]) for i in range(1, len(parts) + 1))) or not destination.parent.resolve().is_relative_to(root.resolve()):
         raise ValueError("Destino fora da pasta selecionada")
     return destination
 
@@ -283,9 +294,16 @@ def execute(root: Path, proposals: list[Proposal], db_path: Path = DB_PATH, prog
                 if target is None:
                     counts["skipped"] += 1
                     continue
+                absent_dirs = []
+                parent = target.parent
+                while parent != root and not parent.exists():
+                    absent_dirs.append(parent)
+                    parent = parent.parent
                 cursor = db.execute("INSERT INTO moves (session_id, source, destination, hash, status) VALUES (?, ?, ?, ?, 'PLANNED')", (session_id, str(source), str(target), source_hash))
                 db.commit()
                 _safe_copy_then_delete(source, target, source_hash)
+                for directory in absent_dirs:
+                    db.execute("INSERT OR IGNORE INTO created_dirs VALUES (?, ?)", (session_id, str(directory)))
                 db.execute("UPDATE moves SET status='MOVED' WHERE id=?", (cursor.lastrowid,))
                 db.commit()
                 counts["moved"] += 1
@@ -326,6 +344,11 @@ def undo_last(db_path: Path = DB_PATH) -> dict:
             except Exception as error:
                 blocked += 1
                 errors.append(f"{destination.name}: {error}")
+        for row in db.execute("SELECT path FROM created_dirs WHERE session_id=? ORDER BY LENGTH(path) DESC", (session_id,)).fetchall():
+            try:
+                Path(row["path"]).rmdir()  # Removes only empty folders made by this session.
+            except OSError:
+                pass
         db.execute("UPDATE sessions SET status=? WHERE id=?", ("UNDO_PARTIAL" if blocked else "UNDONE", session_id))
         db.commit()
     return {"restored": restored, "blocked": blocked, "session_id": session_id, "errors": errors}

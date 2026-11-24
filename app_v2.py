@@ -10,7 +10,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from engine_v2 import Proposal, analyze, available_ocr, execute, last_undoable, safe_name, undo_last
+from engine_v2 import Proposal, _destination, analyze, available_ocr, execute, last_undoable, safe_name, undo_last
 from subject_classifier import subject_names
 
 
@@ -76,10 +76,10 @@ class App:
         ttk.Combobox(filters, textvariable=self.filter, values=("Todos", "Pendentes", "Sugeridos", "Manter"), state="readonly", width=15).pack(side="left", padx=8)
         self.search.trace_add("write", lambda *_: self._refresh())
         self.filter.trace_add("write", lambda *_: self._refresh())
-        columns = ("file", "current", "suggested", "alternative", "name", "action", "warning")
+        columns = ("file", "kind", "current", "suggested", "alternative", "name", "action", "warning")
         self.table = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
         for key, title, width in [
-            ("file", "PDF", 230), ("current", "Pasta atual", 125), ("suggested", "Sugestão", 180),
+            ("file", "PDF", 230), ("kind", "Tipo", 110), ("current", "Pasta atual", 125), ("suggested", "Sugestão", 180),
             ("alternative", "Alternativa", 140), ("name", "Novo nome", 200),
             ("action", "Decisão", 90), ("warning", "Aviso", 200),
         ]:
@@ -205,7 +205,7 @@ class App:
                 continue
             if selected_filter == "Manter" and decision != "MANTER":
                 continue
-            self.table.insert("", "end", iid=str(index), values=(proposal.source.name, proposal.current_folder or "PDF", proposal.subject or "Sem sugestão",
+            self.table.insert("", "end", iid=str(index), values=(proposal.source.name, proposal.kind, proposal.current_folder or "PDF", (proposal.subject + (" (nova pasta)" if proposal.new_folder else "")) if proposal.subject else "Sem sugestão",
                                                                   proposal.alternative, proposal.proposed_name, decision, proposal.warning))
 
     def _new_folder(self):
@@ -239,7 +239,10 @@ class App:
         body.pack(fill="both", expand=True)
         ttk.Label(body, text=proposal.source.name, wraplength=750, font=("Segoe UI", 11, "bold")).pack(anchor="w")
         ttk.Label(body, text=f"Pasta atual: {proposal.current_folder or 'PDF'}").pack(anchor="w", pady=5)
+        ttk.Label(body, text=f"Tipo identificado: {proposal.kind}").pack(anchor="w")
         ttk.Label(body, text=f"Sugestão: {proposal.subject or 'nenhuma'}; alternativa: {proposal.alternative or 'nenhuma'}").pack(anchor="w")
+        if proposal.new_folder:
+            ttk.Label(body, text="Nova pasta proposta. Ela só será criada após confirmar a organização.").pack(anchor="w", pady=3)
         ttk.Label(body, text=f"Motivos: {proposal.evidence or 'nenhuma pista suficiente'}", wraplength=750).pack(anchor="w", pady=6)
         if proposal.warning:
             ttk.Label(body, text=f"Aviso: {proposal.warning}", wraplength=750).pack(anchor="w")
@@ -251,7 +254,8 @@ class App:
         excerpt.pack(fill="both", expand=True, pady=(3, 8))
         ttk.Label(body, text="Pasta de destino (você pode digitar uma nova):").pack(anchor="w")
         subject = tk.StringVar(value=proposal.subject or proposal.current_folder)
-        selector = ttk.Combobox(body, textvariable=subject, values=subject_names(root))
+        folders = [str(path.relative_to(root)).replace("\\", "/") for path in root.rglob("*") if path.is_dir() and not path.is_symlink()]
+        selector = ttk.Combobox(body, textvariable=subject, values=sorted(set(subject_names(root) + folders)))
         selector.pack(fill="x")
         ttk.Label(body, text="Nome do arquivo:").pack(anchor="w", pady=(8, 0))
         filename = tk.StringVar(value=proposal.proposed_name)
@@ -265,14 +269,14 @@ class App:
                 clean = safe_name(Path(filename.get().strip()).stem)
                 if clean != filename.get().strip():
                     raise ValueError("Nome de PDF inválido")
-                if name in {".", ".."} or Path(name).name != name or any(c in name for c in '<>:"/\\|?*'):
-                    raise ValueError("Pasta inválida")
+                _destination(root, name, clean)
             except ValueError as error:
                 messagebox.showerror("Destino inválido", str(error), parent=dialog)
                 return
             proposal.subject = name
             proposal.proposed_name = clean
             proposal.needs_review = False
+            proposal.new_folder = not (root / name).is_dir()
             proposal.action = "MOVE" if proposal.source != root / name / clean else "KEEP"
             self._refresh()
             dialog.destroy()

@@ -13,7 +13,7 @@ SUBJECT_HINTS = {
     "MATEMATICA": ["matematica", "aritmetica", "algebra", "geometria", "calculo", "estatistica", "estatistica basica", "probabilidade"],
     "METODO PARA PRODUCAO DE TRABALHOS CIENTIFICOS": ["metodo para producao de trabalhos cientificos", "metodologia cientifica", "trabalho cientifico", "abnt", "referencias bibliograficas", "citacao", "pesquisa cientifica"],
     "ETICA E CIDADANIA": ["etica", "cidadania", "sociedade", "direitos humanos"],
-    "IA NA PRATICA": ["ia na pratica", "inteligencia artificial", "ia generativa", "prompt"],
+    "IA NA PRATICA": ["ia na pratica", "inteligencia artificial", "ia generativa"],
     "LEITURA E PRODUÇÃO DE TEXTO": ["leitura e producao de texto", "producao textual", "linguagem", "generos textuais"],
     "PENSAMENTO COMPUTACIONAL": ["pensamento computacional", "algoritmo", "decomposicao", "abstracao"],
     "Guitarra": ["guitarra", "violao", "acorde", "escala musical", "tablatura"],
@@ -38,6 +38,28 @@ def subject_names(root: Path) -> list[str]:
         if normalize(name) not in {normalize(n) for n in names}:
             names.append(name)
     return sorted(names, key=normalize)
+
+
+def classify_kind(filename: str, text: str) -> dict:
+    """Recognize a broad context before matching any subject folder."""
+    name = normalize(Path(filename).stem.replace("_", " ").replace("-", " "))
+    head = normalize(text[:6000])
+    sample = f"{name} {head[:2500]}"
+    academic = [term for term in ("univesp", "universidade", "disciplina", "atividade avaliativa", "semana letiva", "professor", "tutor", "matricula") if term in sample]
+    prompts = [term for term in ("prompt mestre", "prompts mestres", "claude", "chatgpt", "engenharia de prompt") if term in sample]
+    if prompts and not academic:
+        return {"kind": "Desenvolvimento", "suggestion": "DEV/Prompts e IA", "evidence": "tema de prompts e ferramentas de IA: " + ", ".join(prompts[:3]), "new_folder": True}
+    if not academic and any(term in sample for term in ("matematica", "aritmetica", "algebra", "metodologia cientifica", "pensamento computacional", "etica e cidadania", "leitura e producao de texto")):
+        academic = ["tema de disciplina"]
+    if academic:
+        return {"kind": "Faculdade", "suggestion": "", "evidence": "contexto acadêmico: " + ", ".join(academic[:3]), "new_folder": False}
+    if any(term in sample for term in ("cpf", "passaporte", "certidao", "documento pessoal", "comprovante de residencia")):
+        return {"kind": "Pessoal", "suggestion": "Pessoal", "evidence": "documento pessoal", "new_folder": False}
+    if any(term in sample for term in ("guitarra", "tablatura", "acorde", "escala musical")):
+        return {"kind": "Música", "suggestion": "Guitarra", "evidence": "conteúdo de guitarra", "new_folder": False}
+    if any(term in sample for term in ("codigo fonte", "programacao", "desenvolvimento de software", "python", "github")):
+        return {"kind": "Desenvolvimento", "suggestion": "DEV", "evidence": "conteúdo de desenvolvimento", "new_folder": False}
+    return {"kind": "Indefinido", "suggestion": "", "evidence": "contexto insuficiente", "new_folder": False}
 
 
 STOP_WORDS = set("para como sobre entre onde quando este esta esse essa aquele aquela muitos muito todos todas pelos pelas uma uns das dos que com sem nao mais menos seu sua seus suas curso aula material pagina capitulo univesp universidade ensino texto trabalho atividade semana modulo professor aluno turma documento escola educacao nome data pdf www https org com book ebook caso cada dados tabela fato artigo resultado resultados federal empresas with their what more from this that there and the marcos aurelio ferreira miranda conclusao certificado grupo individual template modelo resposta respostas exemplo exemplos".split())
