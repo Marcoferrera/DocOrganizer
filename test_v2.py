@@ -5,10 +5,32 @@ from pathlib import Path
 from reportlab.pdfgen import canvas
 
 from engine_v2 import Proposal, analyze, execute, extract_pdf, last_undoable, undo_last
-from subject_classifier import classify
+from subject_classifier import classify, classify_kind
 
 
 class DocOrganizerV2Tests(unittest.TestCase):
+    def test_prompts_are_not_a_course_and_folder_is_undone(self):
+        self.assertEqual(classify_kind("Prompt Mestre Windows - Limbus Split Pro.pdf", "Prompts mestres para Claude e ChatGPT")["suggestion"], "DEV/Prompts e IA")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "IA NA PRATICA").mkdir()
+            source = root / "Prompt Mestre Windows - Limbus Split Pro.pdf"
+            document = canvas.Canvas(str(source))
+            document.drawString(72, 720, "Prompts mestres para Claude e ChatGPT")
+            document.save()
+            proposal = analyze(root, False, scope="inbox")[0]
+            self.assertEqual(proposal.subject, "DEV/Prompts e IA")
+            self.assertTrue(proposal.needs_review)
+            self.assertTrue(proposal.new_folder)
+            self.assertFalse((root / "DEV").exists())
+            proposal.action = "MOVE"
+            db = root / "history.db"
+            self.assertEqual(execute(root, [proposal], db)["moved"], 1)
+            self.assertTrue((root / "DEV" / "Prompts e IA" / source.name).exists())
+            self.assertEqual(undo_last(db)["restored"], 1)
+            self.assertTrue(source.exists())
+            self.assertFalse((root / "DEV").exists())
+
     def test_analysis_scopes(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

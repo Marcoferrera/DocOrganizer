@@ -5,10 +5,10 @@ Aplicativo Windows para organizar PDFs locais por matéria ou categoria, sem env
 ## Uso
 
 1. Instale e abra o DocOrganizer 2.
-2. Selecione a pasta que contém os PDFs. O aplicativo também lê as subpastas e pode sugerir correções para arquivos já organizados.
+2. Selecione a pasta que contém os PDFs. Escolha **PDFs soltos** para organizar novos arquivos ou **Auditar subpastas** para revisar os que já estão organizados.
 3. Clique em **Analisar**. O texto nativo é lido; páginas sem texto podem passar pelo OCR local em português.
 4. Confira a tabela. Itens **PENDENTE** ficam no lugar até você escolher o destino. Dê um clique duplo para abrir a revisão e, se necessário, abra o PDF original.
-5. Crie novas pastas pelo botão **Criar pasta** ou digite o nome de uma nova categoria na revisão.
+5. O aplicativo pode propor uma nova pasta, como `DEV/Prompts e IA`, sem criá-la durante a análise. Na revisão, aprove a proposta, escolha uma pasta existente dentro da pasta PDF ou digite outro destino. A nova pasta só é criada ao confirmar a organização.
 6. Ajuste o nome proposto de cada arquivo, se quiser. Uma mudança de nome sugerida pelo aplicativo sempre exige revisão.
 7. Clique em **Organizar plano aprovado** e confirme a quantidade de arquivos. Nenhum item pendente é movido.
 8. Para reverter, clique em **Desfazer última sessão**. Um PDF alterado depois da organização é preservado e sinalizado como bloqueado.
@@ -17,7 +17,9 @@ O aplicativo evita sobrescrever arquivos. Quando existe um arquivo idêntico no 
 
 ## Classificação
 
-As pastas existentes fornecem os nomes das categorias. Matemática e Método para Produção de Trabalhos Científicos também estão disponíveis inicialmente. O aplicativo usa pistas do nome e do texto e aprende semelhanças com PDFs já colocados nas pastas. Sugestões fracas, falhas de leitura e mudanças de nome propostas aparecem como pendentes. A leitura é limitada às primeiras 10 páginas; no máximo duas páginas sem texto recebem OCR para manter a análise viável em lotes grandes.
+O aplicativo identifica primeiro o contexto geral: faculdade, desenvolvimento, pessoal, música ou indefinido. Depois sugere uma pasta entre as existentes ou propõe uma nova, com base no nome e no texto extraído. Termos como “prompt” não bastam para classificar um arquivo como material de uma disciplina. Pastas existentes e PDFs já organizados ajudam a sugerir destinos, mas propostas de nova pasta e sugestões incertas exigem revisão. A busca de pastas é limitada à pasta PDF selecionada e suas subpastas. A leitura é limitada às primeiras 10 páginas; no máximo duas páginas sem texto recebem OCR para manter a análise viável em lotes grandes.
+
+O desfazer restaura os arquivos da última sessão e remove apenas pastas criadas por essa sessão que estejam vazias. Pastas que já existiam e pastas com arquivos são preservadas.
 
 ## Desenvolvimento e instalador
 
