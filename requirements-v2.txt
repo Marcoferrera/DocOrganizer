@@ -1,0 +1,5 @@
+pypdfium2==5.15.2
+pytesseract==0.3.13
+Pillow==13.0.0
+pyinstaller==6.22.3
+reportlab==5.1.1

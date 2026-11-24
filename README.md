@@ -1,85 +1,34 @@
-# DocOrganizer
+# DocOrganizer 2
 
-Organizador local de documentos para Windows.
+Aplicativo Windows para organizar PDFs locais por matéria ou categoria, sem enviar documentos para a internet.
 
-O DocOrganizer analisa pastas, extrai texto e metadados de documentos (PDF, DOCX, TXT, MD) e os organiza automaticamente em pastas temáticas, com **segurança** e **transparência**.
+**Instalador:** [baixe a versão mais recente no GitHub Releases](https://github.com/Marcoferrera/DocOrganizer/releases/latest).
 
----
+A documentação e o código da versão 1.3 permanecem em [README-v1.md](README-v1.md). O histórico de desfazer da versão 1.3 não é importado para a versão 2.
 
-## ✨ Funcionalidades
+## Uso
 
-- Varredura recursiva de diretórios
-- Suporte a:
-  - PDFs textuais
-  - PDFs escaneados (OCR local via Tesseract)
-  - PDFs híbridos (texto + imagem)
-  - Documentos Word (.docx)
-  - Arquivos de texto (.txt) e Markdown (.md) — opcionais
-- Extração de texto e metadados
-- Classificação determinística por regras de palavras-chave e pontuação
-- Níveis de confiança:
-  - `SEGURA` — classificação confiável
-  - `REVISAO` — ambiguidade, requer revisão manual
-  - `TRIAGEM` — não foi possível classificar
-- Geração de plano de organização com pré-visualização
-- Execução segura:
-  - Nunca sobrescreve arquivos
-  - Renomeia automaticamente em conflitos
-  - Ignora duplicados idênticos
-- Histórico persistente em SQLite
-- Desfazer última organização (Undo)
-- Interface gráfica simples com Tkinter
-- Botão Cancelar para interromper análise
-- OCR local incluído (Tesseract)
-- 100% offline — nenhum dado sai do computador
+1. Instale e abra o DocOrganizer 2.
+2. Selecione a pasta que contém os PDFs. O aplicativo também lê as subpastas e pode sugerir correções para arquivos já organizados.
+3. Clique em **Analisar**. O texto nativo é lido; páginas sem texto podem passar pelo OCR local em português.
+4. Confira a tabela. Itens **PENDENTE** ficam no lugar até você escolher o destino. Dê um clique duplo para abrir a revisão e, se necessário, abra o PDF original.
+5. Crie novas pastas pelo botão **Criar pasta** ou digite o nome de uma nova categoria na revisão.
+6. Ajuste o nome proposto de cada arquivo, se quiser. Uma mudança de nome sugerida pelo aplicativo sempre exige revisão.
+7. Clique em **Organizar plano aprovado** e confirme a quantidade de arquivos. Nenhum item pendente é movido.
+8. Para reverter, clique em **Desfazer última sessão**. Um PDF alterado depois da organização é preservado e sinalizado como bloqueado.
 
----
+O aplicativo evita sobrescrever arquivos. Quando existe um arquivo idêntico no destino, ele mantém a origem. Se há outro arquivo com o mesmo nome e conteúdo diferente, acrescenta um número ao nome. O histórico fica em `%APPDATA%\DocOrganizer\history_v2.db`.
 
-## 📦 Formatos suportados
+## Classificação
 
-| Tipo | Extensão | Processamento |
-|------|----------|---------------|
-| Documento prioritário | `.pdf`, `.docx` | Sempre processado |
-| Texto simples (opcional) | `.txt`, `.md` | Desativado por padrão; pode ser habilitado na interface |
+As pastas existentes fornecem os nomes das categorias. Matemática e Método para Produção de Trabalhos Científicos também estão disponíveis inicialmente. O aplicativo usa pistas do nome e do texto e aprende semelhanças com PDFs já colocados nas pastas. Sugestões fracas, falhas de leitura e mudanças de nome propostas aparecem como pendentes. A leitura é limitada às primeiras 10 páginas; no máximo duas páginas sem texto recebem OCR para manter a análise viável em lotes grandes.
 
-> Por padrão, o DocOrganizer processa **apenas PDF e DOCX** para evitar arquivos de configuração de jogos/programas. Você pode ativar a inclusão de `.txt` e `.md` marcando a opção na interface.
+## Desenvolvimento e instalador
 
----
+No Windows, com Python 3 e Tesseract OCR com os idiomas `por` e `eng` instalados em `C:\Program Files\Tesseract-OCR`, execute `build_windows.ps1`. Ele instala as dependências locais, executa os testes, gera o executável e compila o instalador com Inno Setup 6. O instalador é salvo em `dist\installer`. Para usar diretamente durante o desenvolvimento, execute `python app_v2.py` no ambiente virtual.
 
-## 🖥️ Como usar (usuário final)
+O instalador inclui o OCR local. Ele não modifica seus PDFs durante a instalação. A organização só ocorre após confirmação explícita na interface.
 
-1. Execute o **DocOrganizer.exe** (se estiver usando o instalador).
-2. Selecione a **pasta de origem** (onde estão os documentos).
-3. Selecione a **pasta de destino** (onde as pastas temáticas serão criadas).
-4. Escolha as opções:
-   - **Incluir subpastas**: varre também os subdiretórios.
-   - **Ativar OCR**: processa PDFs escaneados.
-   - **Incluir arquivos de texto**: processa `.txt` e `.md`.
-5. Clique em **Analisar**.
-6. Clique em **Pré-visualizar** para ver o plano proposto.
-7. Clique em **Organizar** para executar a organização (após confirmação).
-8. Se necessário, use **Desfazer última** para reverter a operação.
+## Licença
 
----
-
-## 🧰 Instalação (desenvolvedores)
-
-### Pré-requisitos
-
-- Python 3.12
-- Pip
-- Git
-
-### Passos
-
-```bash
-# Clone o repositório
-git clone https://github.com/Marcoferrera/DocOrganizer.git
-cd DocOrganizer
-
-# Crie e ative um ambiente virtual
-python -m venv venv
-venv\Scripts\activate  # Windows
-
-# Instale as dependências
-pip install PyMuPDF python-docx pytesseract Pillow
+O código do DocOrganizer é distribuído sob a licença [MIT](LICENSE). O instalador contém componentes com licenças próprias; veja [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

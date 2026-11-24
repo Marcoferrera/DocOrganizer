@@ -1,5 +1,6 @@
 # Ambiente virtual
 venv/
+.venv/
 
 # Arquivos gerados
 __pycache__/
