@@ -47,7 +47,8 @@ def classify_kind(filename: str, text: str) -> dict:
     sample = f"{name} {head[:2500]}"
     academic = [term for term in ("univesp", "universidade", "disciplina", "atividade avaliativa", "semana letiva", "professor", "tutor", "matricula") if term in sample]
     prompts = [term for term in ("prompt mestre", "prompts mestres", "claude", "chatgpt", "engenharia de prompt") if term in sample]
-    if prompts and not academic:
+    explicit_ai_course = any(term in sample for term in ("ia na pratica", "disciplina de ia", "atividade avaliativa de ia"))
+    if prompts and not explicit_ai_course:
         return {"kind": "Desenvolvimento", "suggestion": "DEV/Prompts e IA", "evidence": "tema de prompts e ferramentas de IA: " + ", ".join(prompts[:3]), "new_folder": True}
     if not academic and any(term in sample for term in ("matematica", "aritmetica", "algebra", "metodologia cientifica", "pensamento computacional", "etica e cidadania", "leitura e producao de texto")):
         academic = ["tema de disciplina"]
