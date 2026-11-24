@@ -17,6 +17,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\DocOrganizer2.exe
 WizardStyle=modern
 LicenseFile=LICENSE
+SetupIconFile=assets\docorganizer.ico
 
 [Files]
 Source: "dist\DocOrganizer2\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

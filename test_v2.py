@@ -9,6 +9,21 @@ from subject_classifier import classify
 
 
 class DocOrganizerV2Tests(unittest.TestCase):
+    def test_analysis_scopes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subject = root / "Matemática"
+            subject.mkdir()
+            for path in (root / "solto.pdf", subject / "organizado.pdf"):
+                document = canvas.Canvas(str(path))
+                document.drawString(72, 720, "Matematica e aritmetica")
+                document.save()
+            inbox = analyze(root, False, scope="inbox")
+            audit = analyze(root, False, scope="audit")
+            self.assertEqual([p.source.name for p in inbox], ["solto.pdf"])
+            self.assertEqual([p.source.name for p in audit], ["organizado.pdf"])
+            self.assertIn("Matematica", inbox[0].excerpt)
+
     def test_subject_ranking_and_ambiguity(self):
         subjects = ["Matemática", "Ética e Cidadania"]
         result = classify("aula.pdf", "Matemática. Aritmética e álgebra.", subjects)

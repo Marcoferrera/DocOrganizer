@@ -8,7 +8,7 @@ if (-not (Test-Path -LiteralPath '.venv\Scripts\python.exe')) {
 & '.venv\Scripts\python.exe' -m unittest -v test_v2.py
 if ($LASTEXITCODE -ne 0) { throw 'Os testes falharam.' }
 
-& '.venv\Scripts\python.exe' -m PyInstaller --noconfirm --clean --windowed --onedir --name DocOrganizer2 app_v2.py
+& '.venv\Scripts\python.exe' -m PyInstaller --noconfirm --clean --windowed --onedir --name DocOrganizer2 --icon assets\docorganizer.ico --add-data 'assets\docorganizer.ico;assets' app_v2.py
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao criar o executável.' }
 
 $ocrSource = 'C:\Program Files\Tesseract-OCR'
