@@ -127,12 +127,17 @@ class Proposal:
     current_folder: str
     needs_review: bool
     action: str = "MOVE"
+    excerpt: str = ""
 
 
-def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], None] | None = None, cancel: Callable[[], bool] | None = None) -> list[Proposal]:
+def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], None] | None = None,
+            cancel: Callable[[], bool] | None = None, scope: str = "all") -> list[Proposal]:
     root = root.resolve(strict=True)
+    if scope not in {"all", "inbox", "audit"}:
+        raise ValueError("Modo de análise inválido")
     subjects = subject_names(root)
-    documents = sorted((p for p in root.rglob("*.pdf") if p.is_file() and not p.is_symlink() and "triagem" not in {normalize(part) for part in p.relative_to(root).parts[:-1]}), key=lambda p: str(p).lower())
+    all_documents = sorted((p for p in root.rglob("*.pdf") if p.is_file() and not p.is_symlink() and "triagem" not in {normalize(part) for part in p.relative_to(root).parts[:-1]}), key=lambda p: str(p).lower())
+    documents = [p for p in all_documents if scope == "all" or (p.parent == root) == (scope == "inbox")]
     extracted = []
     for index, path in enumerate(documents, 1):
         if cancel and cancel():
@@ -145,7 +150,22 @@ def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], Non
         if progress:
             progress(index, len(documents))
     examples = [(path.parent.name, path.name + " " + result["text"])
-                for path, result in extracted if path.parent != root and not result["warning"]]
+                for path, result in extracted if path.parent != root and result["text"].strip()]
+    if scope == "inbox":
+        per_folder = {}
+        for path in all_documents:
+            if path.parent == root or path.parent.name not in subjects:
+                continue
+            count = per_folder.get(path.parent.name, 0)
+            if count >= 15:
+                continue
+            per_folder[path.parent.name] = count + 1
+            try:
+                sample = extract_pdf(path, use_ocr=False)
+                if sample["text"].strip():
+                    examples.append((path.parent.name, path.name + " " + sample["text"]))
+            except Exception:
+                continue
     model = FolderModel(examples, subjects)
     proposals = []
     for path, result in extracted:
@@ -166,7 +186,8 @@ def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], Non
             needs_review = confidence or (bool(warning) and not result["text"].strip()) or proposed_name != path.name
             proposal = Proposal(path, subject, ranked["alternative"], ", ".join(ranked["evidence"]), warning,
                                 proposed_name, path.name, current, needs_review,
-                                "KEEP" if needs_review or not subject or subject == current else "MOVE")
+                                "KEEP" if needs_review or not subject or subject == current else "MOVE",
+                                " ".join(result["text"].split())[:1400])
             proposals.append(proposal)
         except Exception as error:
             proposals.append(Proposal(path, "", "", "", str(error), path.name, path.name,

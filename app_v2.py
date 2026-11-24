@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import queue
 import threading
 import tkinter as tk
@@ -17,9 +18,15 @@ class App:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title("DocOrganizer 2 — Organização de PDFs")
-        root.geometry("1160x750")
+        root.geometry("1320x800")
+        icon = (Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "assets" / "docorganizer.ico")
+        if icon.exists():
+            root.iconbitmap(str(icon))
         self.folder = tk.StringVar(value=str(Path.home() / "Desktop" / "PDF") if (Path.home() / "Desktop" / "PDF").is_dir() else "")
         self.ocr = tk.BooleanVar(value=True)
+        self.scope = tk.StringVar(value="inbox")
+        self.search = tk.StringVar()
+        self.filter = tk.StringVar(value="Todos")
         self.status = tk.StringVar(value="Selecione a pasta e clique em Analisar.")
         self.events = queue.Queue()
         self.proposals: list[Proposal] = []
@@ -32,7 +39,7 @@ class App:
         frame = ttk.Frame(self.root, padding=12)
         frame.pack(fill="both", expand=True)
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(3, weight=1)
+        frame.rowconfigure(4, weight=1)
         ttk.Label(frame, text="Pasta dos PDFs").grid(row=0, column=0, sticky="w")
         ttk.Entry(frame, textvariable=self.folder).grid(row=0, column=1, sticky="ew", padx=8)
         ttk.Button(frame, text="Escolher...", command=self._choose).grid(row=0, column=2)
@@ -41,6 +48,8 @@ class App:
         ttk.Checkbutton(options, text="Usar OCR para páginas escaneadas", variable=self.ocr).pack(side="left")
         self.ocr_label = ttk.Label(options, text="")
         self.ocr_label.pack(side="left", padx=12)
+        ttk.Radiobutton(options, text="PDFs soltos", variable=self.scope, value="inbox", command=self._change_scope).pack(side="left", padx=(20, 4))
+        ttk.Radiobutton(options, text="Auditar subpastas", variable=self.scope, value="audit", command=self._change_scope).pack(side="left")
         ok, _ = available_ocr()
         self.ocr_label.config(text="OCR em português disponível" if ok else "OCR indisponível: instale Tesseract com idioma português")
         toolbar = ttk.Frame(frame)
@@ -49,6 +58,8 @@ class App:
         self.analyze_button.pack(side="left", padx=3)
         self.review_button = ttk.Button(toolbar, text="Revisar selecionado", command=self._review)
         self.review_button.pack(side="left", padx=3)
+        self.open_button = ttk.Button(toolbar, text="Abrir PDF", command=self._open_selected)
+        self.open_button.pack(side="left", padx=3)
         self.new_folder_button = ttk.Button(toolbar, text="Criar pasta", command=self._new_folder)
         self.new_folder_button.pack(side="left", padx=3)
         self.execute_button = ttk.Button(toolbar, text="Organizar plano aprovado", command=self._execute)
@@ -57,6 +68,14 @@ class App:
         self.undo_button.pack(side="left", padx=3)
         self.cancel_button = ttk.Button(toolbar, text="Cancelar", command=self._cancel, state="disabled")
         self.cancel_button.pack(side="left", padx=3)
+        filters = ttk.Frame(frame)
+        filters.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(3, 5))
+        ttk.Label(filters, text="Buscar").pack(side="left")
+        ttk.Entry(filters, textvariable=self.search, width=42).pack(side="left", padx=(8, 16))
+        ttk.Label(filters, text="Mostrar").pack(side="left")
+        ttk.Combobox(filters, textvariable=self.filter, values=("Todos", "Pendentes", "Sugeridos", "Manter"), state="readonly", width=15).pack(side="left", padx=8)
+        self.search.trace_add("write", lambda *_: self._refresh())
+        self.filter.trace_add("write", lambda *_: self._refresh())
         columns = ("file", "current", "suggested", "alternative", "name", "action", "warning")
         self.table = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
         for key, title, width in [
@@ -66,15 +85,33 @@ class App:
         ]:
             self.table.heading(key, text=title)
             self.table.column(key, width=width, minwidth=75)
-        self.table.grid(row=3, column=0, columnspan=3, sticky="nsew")
+        self.table.grid(row=4, column=0, columnspan=3, sticky="nsew")
         self.table.bind("<Double-1>", lambda _: self._review())
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self.table.yview)
-        scrollbar.grid(row=3, column=3, sticky="ns")
-        self.table.configure(yscrollcommand=scrollbar.set)
-        ttk.Label(frame, text="Revise os itens marcados como PENDENTE. Nenhum arquivo será movido sem a confirmação final.").grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        scrollbar.grid(row=4, column=3, sticky="ns")
+        hscroll = ttk.Scrollbar(frame, orient="horizontal", command=self.table.xview)
+        hscroll.grid(row=5, column=0, columnspan=3, sticky="ew")
+        self.table.configure(yscrollcommand=scrollbar.set, xscrollcommand=hscroll.set)
+        ttk.Label(frame, text="Revise os itens marcados como PENDENTE. Nenhum arquivo será movido sem a confirmação final.").grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
         self.progress = ttk.Progressbar(frame, mode="determinate")
-        self.progress.grid(row=5, column=0, columnspan=3, sticky="ew", pady=8)
-        ttk.Label(frame, textvariable=self.status).grid(row=6, column=0, columnspan=3, sticky="w")
+        self.progress.grid(row=7, column=0, columnspan=3, sticky="ew", pady=8)
+        ttk.Label(frame, textvariable=self.status).grid(row=8, column=0, columnspan=3, sticky="w")
+
+    def _change_scope(self):
+        self.proposals.clear()
+        self._refresh()
+        self.status.set("Modo alterado. Clique em Analisar para gerar um novo plano.")
+
+    def _open_selected(self):
+        selected = self.table.selection()
+        if not selected:
+            messagebox.showinfo("Seleção", "Selecione um PDF na lista.")
+            return
+        source = self.proposals[int(selected[0])].source
+        try:
+            os.startfile(source)
+        except OSError as error:
+            messagebox.showerror("Não foi possível abrir o PDF", str(error))
 
     def _root_path(self) -> Path | None:
         path = Path(self.folder.get().strip())
@@ -92,7 +129,7 @@ class App:
 
     def _busy(self, value: bool):
         self.running = value
-        for button in (self.analyze_button, self.review_button, self.new_folder_button, self.execute_button, self.undo_button):
+        for button in (self.analyze_button, self.review_button, self.open_button, self.new_folder_button, self.execute_button, self.undo_button):
             button.config(state="disabled" if value else "normal")
         self.cancel_button.config(state="normal" if value else "disabled")
 
@@ -151,13 +188,23 @@ class App:
         self._busy(True)
         self.status.set("Lendo PDFs...")
         def work():
-            return analyze(path, self.ocr.get(), lambda i, n: self.events.put(("progress", (i, n))), lambda: self.cancelled)
+            return analyze(path, self.ocr.get(), lambda i, n: self.events.put(("progress", (i, n))), lambda: self.cancelled, self.scope.get())
         threading.Thread(target=self._worker, args=(work,), daemon=True).start()
 
     def _refresh(self):
         self.table.delete(*self.table.get_children())
+        query = self.search.get().strip().casefold()
+        selected_filter = self.filter.get()
         for index, proposal in enumerate(self.proposals):
             decision = "PENDENTE" if proposal.needs_review and proposal.action == "KEEP" else "MOVER" if proposal.action == "MOVE" else "MANTER"
+            if query and query not in " ".join((proposal.source.name, proposal.current_folder, proposal.subject, proposal.alternative, proposal.proposed_name, proposal.warning)).casefold():
+                continue
+            if selected_filter == "Pendentes" and decision != "PENDENTE":
+                continue
+            if selected_filter == "Sugeridos" and decision != "MOVER":
+                continue
+            if selected_filter == "Manter" and decision != "MANTER":
+                continue
             self.table.insert("", "end", iid=str(index), values=(proposal.source.name, proposal.current_folder or "PDF", proposal.subject or "Sem sugestão",
                                                                   proposal.alternative, proposal.proposed_name, decision, proposal.warning))
 
@@ -185,18 +232,23 @@ class App:
             return
         dialog = tk.Toplevel(self.root)
         dialog.title(f"Revisar {proposal.source.name}")
-        dialog.geometry("650x420")
+        dialog.geometry("800x630")
         dialog.transient(self.root)
         dialog.grab_set()
         body = ttk.Frame(dialog, padding=14)
         body.pack(fill="both", expand=True)
-        ttk.Label(body, text=proposal.source.name, wraplength=610, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        ttk.Label(body, text=proposal.source.name, wraplength=750, font=("Segoe UI", 11, "bold")).pack(anchor="w")
         ttk.Label(body, text=f"Pasta atual: {proposal.current_folder or 'PDF'}").pack(anchor="w", pady=5)
         ttk.Label(body, text=f"Sugestão: {proposal.subject or 'nenhuma'}; alternativa: {proposal.alternative or 'nenhuma'}").pack(anchor="w")
-        ttk.Label(body, text=f"Motivos: {proposal.evidence or 'nenhuma pista suficiente'}", wraplength=610).pack(anchor="w", pady=6)
+        ttk.Label(body, text=f"Motivos: {proposal.evidence or 'nenhuma pista suficiente'}", wraplength=750).pack(anchor="w", pady=6)
         if proposal.warning:
-            ttk.Label(body, text=f"Aviso: {proposal.warning}", wraplength=610).pack(anchor="w")
-        ttk.Button(body, text="Abrir PDF para conferir", command=lambda: os.startfile(proposal.source)).pack(anchor="w", pady=8)
+            ttk.Label(body, text=f"Aviso: {proposal.warning}", wraplength=750).pack(anchor="w")
+        ttk.Button(body, text="Abrir PDF para conferir", command=self._open_selected).pack(anchor="w", pady=8)
+        ttk.Label(body, text="Trecho do conteúdo extraído:").pack(anchor="w")
+        excerpt = tk.Text(body, height=8, wrap="word")
+        excerpt.insert("1.0", proposal.excerpt or "Nenhum texto extraído. Abra o PDF para conferir.")
+        excerpt.config(state="disabled")
+        excerpt.pack(fill="both", expand=True, pady=(3, 8))
         ttk.Label(body, text="Pasta de destino (você pode digitar uma nova):").pack(anchor="w")
         subject = tk.StringVar(value=proposal.subject or proposal.current_folder)
         selector = ttk.Combobox(body, textvariable=subject, values=subject_names(root))
