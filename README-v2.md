@@ -21,6 +21,10 @@ O aplicativo identifica primeiro o contexto geral: faculdade, desenvolvimento, p
 
 O desfazer restaura os arquivos da última sessão e remove apenas pastas criadas por essa sessão que estejam vazias. Pastas que já existiam e pastas com arquivos são preservadas.
 
+## Testes secos
+
+Execute `python -m unittest -v test_v2.py test_dry_run.py` no ambiente virtual. Os testes criam PDFs e pastas temporários, verificam sugestões, cancelamento, destinos inválidos, conflitos, OCR e desfazer, e descartam tudo ao terminar. Eles não acessam a pasta PDF do usuário. O teste de OCR é ignorado se o Tesseract em português não estiver instalado.
+
 ## Desenvolvimento e instalador
 
 No Windows, com Python 3 e Tesseract OCR com os idiomas `por` e `eng` instalados em `C:\Program Files\Tesseract-OCR`, execute `build_windows.ps1`. Ele instala as dependências locais, executa os testes, gera o executável e compila o instalador com Inno Setup 6. O instalador é salvo em `dist\installer`. Para usar diretamente durante o desenvolvimento, execute `python app_v2.py` no ambiente virtual.

@@ -41,15 +41,19 @@ class App:
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(4, weight=1)
         ttk.Label(frame, text="Pasta dos PDFs").grid(row=0, column=0, sticky="w")
-        ttk.Entry(frame, textvariable=self.folder).grid(row=0, column=1, sticky="ew", padx=8)
-        ttk.Button(frame, text="Escolher...", command=self._choose).grid(row=0, column=2)
+        self.folder_entry = ttk.Entry(frame, textvariable=self.folder)
+        self.folder_entry.grid(row=0, column=1, sticky="ew", padx=8)
+        self.choose_button = ttk.Button(frame, text="Escolher...", command=self._choose)
+        self.choose_button.grid(row=0, column=2)
         options = ttk.Frame(frame)
         options.grid(row=1, column=0, columnspan=3, sticky="ew", pady=8)
         ttk.Checkbutton(options, text="Usar OCR para páginas escaneadas", variable=self.ocr).pack(side="left")
         self.ocr_label = ttk.Label(options, text="")
         self.ocr_label.pack(side="left", padx=12)
-        ttk.Radiobutton(options, text="PDFs soltos", variable=self.scope, value="inbox", command=self._change_scope).pack(side="left", padx=(20, 4))
-        ttk.Radiobutton(options, text="Auditar subpastas", variable=self.scope, value="audit", command=self._change_scope).pack(side="left")
+        self.inbox_radio = ttk.Radiobutton(options, text="PDFs soltos", variable=self.scope, value="inbox", command=self._change_scope)
+        self.inbox_radio.pack(side="left", padx=(20, 4))
+        self.audit_radio = ttk.Radiobutton(options, text="Auditar subpastas", variable=self.scope, value="audit", command=self._change_scope)
+        self.audit_radio.pack(side="left")
         ok, _ = available_ocr()
         self.ocr_label.config(text="OCR em português disponível" if ok else "OCR indisponível: instale Tesseract com idioma português")
         toolbar = ttk.Frame(frame)
@@ -131,6 +135,8 @@ class App:
         self.running = value
         for button in (self.analyze_button, self.review_button, self.open_button, self.new_folder_button, self.execute_button, self.undo_button):
             button.config(state="disabled" if value else "normal")
+        for widget in (self.folder_entry, self.choose_button, self.inbox_radio, self.audit_radio):
+            widget.config(state="disabled" if value else "normal")
         self.cancel_button.config(state="normal" if value else "disabled")
 
     def _cancel(self):
@@ -187,8 +193,9 @@ class App:
         self._refresh()
         self._busy(True)
         self.status.set("Lendo PDFs...")
+        scope = self.scope.get()
         def work():
-            return analyze(path, self.ocr.get(), lambda i, n: self.events.put(("progress", (i, n))), lambda: self.cancelled, self.scope.get())
+            return analyze(path, self.ocr.get(), lambda i, n: self.events.put(("progress", (i, n))), lambda: self.cancelled, scope)
         threading.Thread(target=self._worker, args=(work,), daemon=True).start()
 
     def _refresh(self):
@@ -295,7 +302,7 @@ class App:
         root = self._root_path()
         if not root:
             return
-        approved = [p for p in self.proposals if p.action == "MOVE"]
+        approved = [p for p in self.proposals if p.action == "MOVE" and not p.needs_review]
         if not approved:
             messagebox.showinfo("Nada a organizar", "Analise os PDFs e aprove ao menos uma movimentação.")
             return

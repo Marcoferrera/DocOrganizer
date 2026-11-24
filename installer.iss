@@ -1,5 +1,5 @@
 #define AppName "DocOrganizer 2"
-#define AppVersion "2.1.0"
+#define AppVersion "2.1.1"
 
 [Setup]
 AppId={{B07CE6F3-73D6-4D7D-92B9-1FC5E5615C2A}

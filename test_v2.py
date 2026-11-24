@@ -24,6 +24,7 @@ class DocOrganizerV2Tests(unittest.TestCase):
             self.assertTrue(proposal.new_folder)
             self.assertFalse((root / "DEV").exists())
             proposal.action = "MOVE"
+            proposal.needs_review = False
             db = root / "history.db"
             self.assertEqual(execute(root, [proposal], db)["moved"], 1)
             self.assertTrue((root / "DEV" / "Prompts e IA" / source.name).exists())

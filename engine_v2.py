@@ -156,6 +156,8 @@ def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], Non
     if scope == "inbox":
         per_folder = {}
         for path in all_documents:
+            if cancel and cancel():
+                break
             if path.parent == root or path.parent.name not in subjects:
                 continue
             count = per_folder.get(path.parent.name, 0)
@@ -223,7 +225,7 @@ def _connection(db_path: Path = DB_PATH) -> sqlite3.Connection:
 
 def _destination(root: Path, subject: str, filename: str) -> Path:
     parts = subject.replace("\\", "/").split("/")
-    if not parts or any(not part or part in {".", ".."} or part.strip(" .") != part or any(c in part for c in '<>:"|?*') for part in parts):
+    if not parts or any(not part or part in {".", ".."} or part.strip(" .") != part or re.fullmatch(r"(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?", part) or any(c in part for c in '<>:"|?*') for part in parts):
         raise ValueError("Pasta de destino inválida")
     if Path(filename).name != filename or Path(filename).suffix.lower() != ".pdf":
         raise ValueError("Nome de PDF inválido")
@@ -271,7 +273,7 @@ def _safe_copy_then_delete(source: Path, destination: Path, expected_hash: str) 
 
 def execute(root: Path, proposals: list[Proposal], db_path: Path = DB_PATH, progress: Callable[[int, int], None] | None = None, cancel: Callable[[], bool] | None = None) -> dict:
     root = root.resolve(strict=True)
-    approved = [p for p in proposals if p.action == "MOVE" and p.subject]
+    approved = [p for p in proposals if p.action == "MOVE" and p.subject and not p.needs_review]
     session_id = uuid.uuid4().hex
     counts = {"moved": 0, "skipped": 0, "failed": 0}
     errors = []
