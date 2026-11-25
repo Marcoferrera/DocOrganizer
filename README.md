@@ -21,7 +21,9 @@ O aplicativo evita sobrescrever arquivos. Quando existe um arquivo idêntico no 
 
 ## Classificação
 
-As pastas existentes fornecem os nomes das categorias. Matemática e Método para Produção de Trabalhos Científicos também estão disponíveis inicialmente. O aplicativo usa pistas do nome e do texto e aprende semelhanças com PDFs já colocados nas pastas. Sugestões fracas, falhas de leitura e mudanças de nome propostas aparecem como pendentes. A leitura é limitada às primeiras 10 páginas; no máximo duas páginas sem texto recebem OCR para manter a análise viável em lotes grandes.
+As pastas existentes fornecem os nomes das categorias. Matemática e Método para Produção de Trabalhos Científicos também estão disponíveis inicialmente. O aplicativo usa pistas do nome e do texto e aprende semelhanças com PDFs já colocados nas pastas. Sugestões fracas, falhas de leitura e mudanças de nome propostas aparecem como pendentes. A leitura agora seleciona até 16 páginas: início, capítulos indicados pelo sumário navegável e amostras posteriores. Até três páginas com pouco texto podem receber OCR local. A revisão mostra as páginas analisadas e as pistas encontradas. O classificador adaptativo só oferece sugestão pendente quando o classificador atual não encontra uma categoria forte; seus limiares ainda precisam ser calibrados em documentos conferidos.
+
+Para gerar um relatório CSV sem alterar os PDFs, execute `python adaptive_analysis.py "C:\caminho\dos\PDFs" "C:\caminho\relatorio.csv"`. Acrescente `--ocr` para aplicar OCR seletivo. Salve o relatório fora da pasta de origem; ele pode conter nomes de documentos pessoais.
 
 ## Desenvolvimento e instalador
 

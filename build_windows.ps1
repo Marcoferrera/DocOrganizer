@@ -5,7 +5,7 @@ if (-not (Test-Path -LiteralPath '.venv\Scripts\python.exe')) {
     python -m venv .venv
 }
 & '.venv\Scripts\python.exe' -m pip install -r requirements-v2.txt
-& '.venv\Scripts\python.exe' -m unittest -v test_v2.py test_dry_run.py
+& '.venv\Scripts\python.exe' -m unittest -v test_v2.py test_dry_run.py test_adaptive_analysis.py
 if ($LASTEXITCODE -ne 0) { throw 'Os testes falharam.' }
 
 & '.venv\Scripts\python.exe' -m PyInstaller --noconfirm --clean --windowed --onedir --name DocOrganizer2 --icon assets\docorganizer.ico --add-data 'assets\docorganizer.ico;assets' app_v2.py

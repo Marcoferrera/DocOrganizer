@@ -21,6 +21,7 @@ import pytesseract
 from PIL import Image
 
 from subject_classifier import FolderModel, classify, classify_kind, normalize, subject_names
+from adaptive_analysis import analyze_pdf, title_is_useful
 
 
 APP_DIR = Path(os.environ.get("APPDATA", Path.home())) / "DocOrganizer"
@@ -56,45 +57,11 @@ def available_ocr() -> tuple[bool, str]:
 def extract_pdf(path: Path, use_ocr: bool = True) -> dict:
     if path.stat().st_size > MAX_PDF_MB * 1024 * 1024:
         return {"text": "", "title": "", "warning": "PDF acima do limite de leitura de 100 MB", "ocr_pages": 0}
-    ocr_ok, language = available_ocr() if use_ocr else (False, "")
-    chunks = []
-    ocr_pages = 0
-    warnings = []
-    try:
-        document = pdfium.PdfDocument(path)
-    except Exception:
-        return {"text": "", "title": "", "warning": "PDF protegido ou inválido", "ocr_pages": 0}
-    try:
-        title = document.get_metadata_value("Title") or ""
-        for page_number in range(min(len(document), MAX_OCR_PAGES)):
-            page = document.get_page(page_number)
-            try:
-                text_page = page.get_textpage()
-                try:
-                    raw = text_page.get_text_range() or ""
-                finally:
-                    text_page.close()
-                if len(raw.strip()) < 80 and use_ocr and ocr_ok and ocr_pages < MAX_OCR_RENDER_PAGES:
-                    try:
-                        bitmap = page.render(scale=150 / 72)
-                        try:
-                            image = bitmap.to_pil()
-                            raw += "\n" + pytesseract.image_to_string(image, lang=language)
-                            ocr_pages += 1
-                        finally:
-                            bitmap.close()
-                    except Exception as error:
-                        warnings.append(f"OCR falhou na página {page_number + 1}: {error}")
-                elif len(raw.strip()) < 80 and use_ocr and not ocr_ok:
-                    warnings.append("OCR em português indisponível")
-                chunks.append(raw)
-            finally:
-                page.close()
-        if len(document) > MAX_OCR_PAGES:
-            warnings.append(f"Lidas as primeiras {MAX_OCR_PAGES} páginas de {len(document)}")
-    finally:
-        document.close()
-    return {"text": "\n".join(chunks), "title": title, "warning": "; ".join(dict.fromkeys(warnings)), "ocr_pages": ocr_pages}
+    result = analyze_pdf(path, ocr=use_ocr, include_text=True)
+    return {"text": result.get("text", ""), "title": result["metadata_title"],
+            "warning": result["warning"], "ocr_pages": len(result["ocr_pages"].split(",")) if result["ocr_pages"] else 0,
+            "pages_read": result["pages_read"], "evidence": result["evidence"],
+            "adaptive_subject": result["subject"], "adaptive_status": result["status"]}
 
 
 def safe_name(name: str) -> str:
@@ -107,7 +74,7 @@ def safe_name(name: str) -> str:
 
 def suggested_filename(original: str, title: str) -> str:
     title = re.sub(r"\s+", " ", title or "").strip()
-    if 12 <= len(title) <= 120 and normalize(title) not in {"untitled", "microsoft word", "documento"}:
+    if title_is_useful(title, original):
         try:
             return safe_name(title)
         except ValueError:
@@ -177,6 +144,11 @@ def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], Non
             current = path.parent.name if path.parent != root else ""
             kind = classify_kind(path.name, result["text"])
             ranked = classify(path.name, result["text"], subjects, current)
+            adaptive = result.get("adaptive_subject", "")
+            if adaptive and ranked["score"] < 6:
+                ranked["suggestion"] = adaptive
+                ranked["evidence"] = [result.get("evidence", "")]
+                ranked["needs_review"] = True
             if kind["kind"] != "Faculdade":
                 ranked["suggestion"] = kind["suggestion"]
                 ranked["alternative"] = ""
@@ -190,8 +162,12 @@ def analyze(root: Path, use_ocr: bool = True, progress: Callable[[int, int], Non
                     ranked["evidence"] = ["semelhança com PDFs já organizados: " + ", ".join(learned[0][2])]
                     ranked["needs_review"] = True
             subject = ranked["suggestion"]
+            if subject == adaptive and result.get("evidence"):
+                ranked["evidence"] = list(ranked["evidence"]) + ["Pistas por página: " + result["evidence"]]
             confidence = ranked["needs_review"]
             warning = result["warning"]
+            if result.get("pages_read"):
+                warning = "; ".join(filter(None, (warning, "Páginas analisadas: " + result["pages_read"])))
             proposed_name = suggested_filename(path.name, result["title"])
             needs_review = confidence or kind["new_folder"] or (bool(warning) and not result["text"].strip()) or proposed_name != path.name
             proposal = Proposal(path, subject, ranked["alternative"], ", ".join(ranked["evidence"]), warning,

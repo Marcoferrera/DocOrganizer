@@ -18,3 +18,5 @@ config_local.py
 # Arquivos do sistema
 .DS_Store
 Thumbs.db
+analysis_*.csv
+build_log.txt
